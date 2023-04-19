@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package nakama
 
 import (
 	"context"
@@ -61,7 +61,7 @@ var (
 	}
 )
 
-func main() {
+func Run() {
 	semver := fmt.Sprintf("%s+%s", version, commitID)
 	// Always set default timeout on HTTP client.
 	http.DefaultClient.Timeout = 1500 * time.Millisecond

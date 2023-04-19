@@ -35,6 +35,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+var CustomInitializer func(context.Context, runtime.Logger, *sql.DB, runtime.NakamaModule, runtime.Initializer) error
+
 // No need for a stateful RuntimeProviderGo here.
 
 type RuntimeGoInitializer struct {
@@ -2643,25 +2645,34 @@ func NewRuntimeProviderGo(ctx context.Context, logger, startupLogger *zap.Logger
 	startupLogger.Info("Initialising Go runtime provider", zap.String("path", rootPath))
 
 	modulePaths := make([]string, 0)
-	for _, path := range paths {
-		// Skip everything except shared object files.
-		if strings.ToLower(filepath.Ext(path)) != ".so" {
-			continue
-		}
 
-		// Open the plugin, and look up the required initialisation function.
-		relPath, name, fn, err := openGoModule(startupLogger, rootPath, path)
-		if err != nil {
-			// Errors are already logged in the function above.
+	if CustomInitializer != nil {
+		if err := CustomInitializer(ctx, runtimeLogger, db, nk, initializer); err != nil {
 			return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
+	} else {
+		startupLogger.Warn("Custom Module not found")
 
-		// Run the initialisation.
-		if err = fn(ctx, runtimeLogger, db, nk, initializer); err != nil {
-			startupLogger.Fatal("Error returned by InitModule function in Go module", zap.String("name", name), zap.Error(err))
-			return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, errors.New("error returned by InitModule function in Go module")
+		for _, path := range paths {
+			// Skip everything except shared object files.
+			if strings.ToLower(filepath.Ext(path)) != ".so" {
+				continue
+			}
+
+			// Open the plugin, and look up the required initialisation function.
+			relPath, name, fn, err := openGoModule(startupLogger, rootPath, path)
+			if err != nil {
+				// Errors are already logged in the function above.
+				return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+			}
+
+			// Run the initialisation.
+			if err = fn(ctx, runtimeLogger, db, nk, initializer); err != nil {
+				startupLogger.Fatal("Error returned by InitModule function in Go module", zap.String("name", name), zap.Error(err))
+				return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, errors.New("error returned by InitModule function in Go module")
+			}
+			modulePaths = append(modulePaths, relPath)
 		}
-		modulePaths = append(modulePaths, relPath)
 	}
 
 	startupLogger.Info("Go runtime modules loaded")
