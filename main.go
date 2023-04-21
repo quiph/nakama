@@ -66,7 +66,7 @@ func Migrate(dbUrl string) {
 	migrate.Parse([]string{
 		"up",
 		"--database.address",
-		"nakama:9KtHddR1ycVLC7loCg7d@nakama-staging.cvgckukmrvlc.ap-south-1.rds.amazonaws.com:5432/nakama",
+		dbUrl,
 	}, tmpLogger)
 }
 
