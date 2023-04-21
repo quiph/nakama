@@ -61,7 +61,16 @@ var (
 	}
 )
 
-func Run() {
+func Migrate(dbUrl string) {
+	tmpLogger := server.NewJSONLogger(os.Stdout, zapcore.InfoLevel, server.JSONFormat)
+	migrate.Parse([]string{
+		"up",
+		"--database.address",
+		"nakama:9KtHddR1ycVLC7loCg7d@nakama-staging.cvgckukmrvlc.ap-south-1.rds.amazonaws.com:5432/nakama",
+	}, tmpLogger)
+}
+
+func Run(dbUrl string) {
 	semver := fmt.Sprintf("%s+%s", version, commitID)
 	// Always set default timeout on HTTP client.
 	http.DefaultClient.Timeout = 1500 * time.Millisecond
@@ -113,6 +122,7 @@ func Run() {
 	rand.Seed(seed)
 
 	redactedAddresses := make([]string, 0, 1)
+	config.GetDatabase().Addresses = []string{dbUrl}
 	for _, address := range config.GetDatabase().Addresses {
 		rawURL := fmt.Sprintf("postgres://%s", address)
 		parsedURL, err := url.Parse(rawURL)
