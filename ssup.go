@@ -1,108 +1,47 @@
-// Copyright 2018 The Nakama Authors
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package nakama
 
 import (
 	"context"
 	cryptoRand "crypto/rand"
 	"encoding/binary"
-	"flag"
 	"fmt"
-	"math/rand"
-	"net/http"
-	"net/url"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"syscall"
-	"time"
-
-	"github.com/gofrs/uuid"
 	"github.com/heroiclabs/nakama/v3/console"
 	"github.com/heroiclabs/nakama/v3/ga"
 	"github.com/heroiclabs/nakama/v3/migrate"
 	"github.com/heroiclabs/nakama/v3/server"
 	"github.com/heroiclabs/nakama/v3/social"
-	_ "github.com/jackc/pgx/v4/stdlib"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"google.golang.org/protobuf/encoding/protojson"
+	"math/rand"
+	"net/http"
+	"net/url"
+	"os"
+	"os/signal"
+	"runtime"
+	"strings"
+	"syscall"
+	"time"
 )
 
-const cookieFilename = ".cookie"
+func Migrate(dbUrl string) {
+	tmpLogger := server.NewJSONLogger(os.Stdout, zapcore.InfoLevel, server.JSONFormat)
+	migrate.Parse([]string{
+		"up",
+		"--database.address",
+		dbUrl,
+	}, tmpLogger)
+}
 
-var (
-	version  string = "3.0.0"
-	commitID string = "dev"
-
-	// Shared utility components.
-	jsonpbMarshaler = &protojson.MarshalOptions{
-		UseEnumNumbers:  true,
-		EmitUnpopulated: false,
-		Indent:          "",
-		UseProtoNames:   true,
-	}
-	jsonpbUnmarshaler = &protojson.UnmarshalOptions{
-		DiscardUnknown: false,
-	}
-)
-
-func main() {
+func RunNakama(config server.Config, shutDown func(context.Context)) {
 	semver := fmt.Sprintf("%s+%s", version, commitID)
-	// Always set default timeout on HTTP client.
 	http.DefaultClient.Timeout = 1500 * time.Millisecond
 
 	tmpLogger := server.NewJSONLogger(os.Stdout, zapcore.InfoLevel, server.JSONFormat)
-
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "--version":
-			fmt.Println(semver)
-			return
-		case "migrate":
-			migrate.Parse(os.Args[2:], tmpLogger)
-			return
-		case "check":
-			// Parse any command line args to look up runtime path.
-			// Use full config structure even if not all of its options are available in this command.
-			config := server.NewConfig(tmpLogger)
-			var runtimePath string
-			flags := flag.NewFlagSet("check", flag.ExitOnError)
-			flags.StringVar(&runtimePath, "runtime.path", filepath.Join(config.GetDataDir(), "modules"), "Path for the server to scan for Lua and Go library files.")
-			if err := flags.Parse(os.Args[2:]); err != nil {
-				tmpLogger.Fatal("Could not parse check flags.")
-			}
-			config.GetRuntime().Path = runtimePath
-
-			if err := server.CheckRuntime(tmpLogger, config, version); err != nil {
-				// Errors are already logged in the function above.
-				os.Exit(1)
-			}
-			return
-		}
-	}
-
-	config := server.ParseArgs(tmpLogger, os.Args)
 	logger, startupLogger := server.SetupLogging(tmpLogger, config)
 	configWarnings := server.CheckConfig(logger, config)
 
 	startupLogger.Info("Nakama starting")
 	startupLogger.Info("Node", zap.String("name", config.GetName()), zap.String("version", semver), zap.String("runtime", runtime.Version()), zap.Int("cpu", runtime.NumCPU()), zap.Int("proc", runtime.GOMAXPROCS(0)))
-	startupLogger.Info("Data directory", zap.String("path", config.GetDataDir()))
 
 	// Initialize the global random with strongly seed.
 	var seed int64
@@ -114,11 +53,14 @@ func main() {
 
 	redactedAddresses := make([]string, 0, 1)
 	for _, address := range config.GetDatabase().Addresses {
+		Migrate(address)
+
 		rawURL := fmt.Sprintf("postgres://%s", address)
 		parsedURL, err := url.Parse(rawURL)
 		if err != nil {
 			logger.Fatal("Bad connection URL", zap.Error(err))
 		}
+
 		redactedAddresses = append(redactedAddresses, strings.TrimPrefix(parsedURL.Redacted(), "postgres://"))
 	}
 	startupLogger.Info("Database connections", zap.Strings("dsns", redactedAddresses))
@@ -190,6 +132,7 @@ func main() {
 
 	// Wait for a termination signal.
 	<-c
+	shutDown(ctx)
 
 	graceSeconds := config.GetShutdownGraceSec()
 
@@ -244,39 +187,4 @@ func main() {
 	}
 
 	startupLogger.Info("Shutdown complete")
-
-	os.Exit(0)
-}
-
-// Help improve Nakama by sending anonymous usage statistics.
-//
-// You can disable the telemetry completely before server start by setting the
-// environment variable "NAKAMA_TELEMETRY" - i.e. NAKAMA_TELEMETRY=0 nakama
-//
-// These properties are collected:
-// * A unique UUID v4 random identifier which is generated.
-// * Version of Nakama being used which includes build metadata.
-// * Amount of time the server ran for.
-//
-// This information is sent via Google Analytics which allows the Nakama team to
-// analyze usage patterns and errors in order to help improve the server.
-func runTelemetry(httpc *http.Client, gacode string, cookie string) {
-	if ga.SendSessionStart(httpc, gacode, cookie) != nil {
-		return
-	}
-	if ga.SendEvent(httpc, gacode, cookie, &ga.Event{Ec: "version", Ea: fmt.Sprintf("%s+%s", version, commitID)}) != nil {
-		return
-	}
-	_ = ga.SendEvent(httpc, gacode, cookie, &ga.Event{Ec: "variant", Ea: "nakama"})
-}
-
-func newOrLoadCookie(config server.Config) string {
-	filePath := filepath.FromSlash(config.GetDataDir() + "/" + cookieFilename)
-	b, err := os.ReadFile(filePath)
-	cookie := uuid.FromBytesOrNil(b)
-	if err != nil || cookie == uuid.Nil {
-		cookie = uuid.Must(uuid.NewV4())
-		_ = os.WriteFile(filePath, cookie.Bytes(), 0644)
-	}
-	return cookie.String()
 }
