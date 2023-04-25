@@ -436,7 +436,7 @@ func convertRuntimeEnv(logger *zap.Logger, existingEnv map[string]string, mergeE
 	return envMap
 }
 
-type config struct {
+type NkConfig struct {
 	Name             string             `yaml:"name" json:"name" usage:"Nakama server’s node name - must be unique."`
 	Config           []string           `yaml:"config" json:"config" usage:"The absolute file path to configuration YAML file."`
 	ShutdownGraceSec int                `yaml:"shutdown_grace_sec" json:"shutdown_grace_sec" usage:"Maximum number of seconds to wait for the server to complete work before shutting down. Default is 0 seconds. If 0 the server will shut down immediately when it receives a termination signal."`
@@ -459,12 +459,12 @@ type config struct {
 }
 
 // NewConfig constructs a Config struct which represents server settings, and populates it with default values.
-func NewConfig(logger *zap.Logger) *config {
+func NewConfig(logger *zap.Logger) *NkConfig {
 	cwd, err := os.Getwd()
 	if err != nil {
 		logger.Fatal("Error getting current working directory.", zap.Error(err))
 	}
-	return &config{
+	return &NkConfig{
 		Name:             "nakama",
 		Datadir:          filepath.Join(cwd, "data"),
 		ShutdownGraceSec: 0,
@@ -486,7 +486,7 @@ func NewConfig(logger *zap.Logger) *config {
 	}
 }
 
-func (c *config) Clone() (Config, error) {
+func (c *NkConfig) Clone() (Config, error) {
 	configLogger := *(c.Logger)
 	configMetrics := *(c.Metrics)
 	configSession := *(c.Session)
@@ -502,7 +502,7 @@ func (c *config) Clone() (Config, error) {
 	configIAP := *(c.IAP)
 	configSatori := *(c.Satori)
 	configGoogleAuth := *(c.GoogleAuth)
-	nc := &config{
+	nc := &NkConfig{
 		Name:             c.Name,
 		Datadir:          c.Datadir,
 		ShutdownGraceSec: c.ShutdownGraceSec,
@@ -547,75 +547,75 @@ func (c *config) Clone() (Config, error) {
 	return nc, nil
 }
 
-func (c *config) GetName() string {
+func (c *NkConfig) GetName() string {
 	return c.Name
 }
 
-func (c *config) GetDataDir() string {
+func (c *NkConfig) GetDataDir() string {
 	return c.Datadir
 }
 
-func (c *config) GetShutdownGraceSec() int {
+func (c *NkConfig) GetShutdownGraceSec() int {
 	return c.ShutdownGraceSec
 }
 
-func (c *config) GetLogger() *LoggerConfig {
+func (c *NkConfig) GetLogger() *LoggerConfig {
 	return c.Logger
 }
 
-func (c *config) GetMetrics() *MetricsConfig {
+func (c *NkConfig) GetMetrics() *MetricsConfig {
 	return c.Metrics
 }
 
-func (c *config) GetSession() *SessionConfig {
+func (c *NkConfig) GetSession() *SessionConfig {
 	return c.Session
 }
 
-func (c *config) GetSocket() *SocketConfig {
+func (c *NkConfig) GetSocket() *SocketConfig {
 	return c.Socket
 }
 
-func (c *config) GetDatabase() *DatabaseConfig {
+func (c *NkConfig) GetDatabase() *DatabaseConfig {
 	return c.Database
 }
 
-func (c *config) GetSocial() *SocialConfig {
+func (c *NkConfig) GetSocial() *SocialConfig {
 	return c.Social
 }
 
-func (c *config) GetRuntime() *RuntimeConfig {
+func (c *NkConfig) GetRuntime() *RuntimeConfig {
 	return c.Runtime
 }
 
-func (c *config) GetMatch() *MatchConfig {
+func (c *NkConfig) GetMatch() *MatchConfig {
 	return c.Match
 }
 
-func (c *config) GetTracker() *TrackerConfig {
+func (c *NkConfig) GetTracker() *TrackerConfig {
 	return c.Tracker
 }
 
-func (c *config) GetConsole() *ConsoleConfig {
+func (c *NkConfig) GetConsole() *ConsoleConfig {
 	return c.Console
 }
 
-func (c *config) GetLeaderboard() *LeaderboardConfig {
+func (c *NkConfig) GetLeaderboard() *LeaderboardConfig {
 	return c.Leaderboard
 }
 
-func (c *config) GetMatchmaker() *MatchmakerConfig {
+func (c *NkConfig) GetMatchmaker() *MatchmakerConfig {
 	return c.Matchmaker
 }
 
-func (c *config) GetIAP() *IAPConfig {
+func (c *NkConfig) GetIAP() *IAPConfig {
 	return c.IAP
 }
 
-func (c *config) GetGoogleAuth() *GoogleAuthConfig {
+func (c *NkConfig) GetGoogleAuth() *GoogleAuthConfig {
 	return c.GoogleAuth
 }
 
-func (c *config) GetSatori() *SatoriConfig {
+func (c *NkConfig) GetSatori() *SatoriConfig {
 	return c.Satori
 }
 
