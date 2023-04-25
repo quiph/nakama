@@ -97,7 +97,10 @@ func RunNakama(config server.Config, shutDown func(context.Context)) {
 		if err != nil {
 			logger.Fatal("Bad connection URL", zap.Error(err))
 		}
-		redactedAddresses = append(redactedAddresses, strings.TrimPrefix(parsedURL.Redacted(), "postgres://"))
+
+		addr := strings.TrimPrefix(parsedURL.Redacted(), "postgres://")
+		redactedAddresses = append(redactedAddresses, addr)
+		Migrate(addr)
 	}
 	startupLogger.Info("Database connections", zap.Strings("dsns", redactedAddresses))
 
