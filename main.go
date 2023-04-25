@@ -32,16 +32,15 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid"
-	_ "github.com/jackc/pgx/v4/stdlib"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"google.golang.org/protobuf/encoding/protojson"
-
 	"github.com/heroiclabs/nakama/v3/console"
 	"github.com/heroiclabs/nakama/v3/ga"
 	"github.com/heroiclabs/nakama/v3/migrate"
 	"github.com/heroiclabs/nakama/v3/server"
 	"github.com/heroiclabs/nakama/v3/social"
+	_ "github.com/jackc/pgx/v4/stdlib"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const cookieFilename = ".cookie"
@@ -228,7 +227,7 @@ func RunNakama(config server.Config, shutDown func(context.Context)) {
 	startupLogger.Info("Shutdown complete")
 }
 
-func Run(dbUrl string, shutDown func(context.Context)) {
+func main() {
 	semver := fmt.Sprintf("%s+%s", version, commitID)
 	// Always set default timeout on HTTP client.
 	http.DefaultClient.Timeout = 1500 * time.Millisecond
@@ -280,7 +279,6 @@ func Run(dbUrl string, shutDown func(context.Context)) {
 	rand.Seed(seed)
 
 	redactedAddresses := make([]string, 0, 1)
-	config.GetDatabase().Addresses = []string{dbUrl}
 	for _, address := range config.GetDatabase().Addresses {
 		rawURL := fmt.Sprintf("postgres://%s", address)
 		parsedURL, err := url.Parse(rawURL)
@@ -358,7 +356,6 @@ func Run(dbUrl string, shutDown func(context.Context)) {
 
 	// Wait for a termination signal.
 	<-c
-	shutDown(ctx)
 
 	graceSeconds := config.GetShutdownGraceSec()
 
@@ -413,6 +410,8 @@ func Run(dbUrl string, shutDown func(context.Context)) {
 	}
 
 	startupLogger.Info("Shutdown complete")
+
+	os.Exit(0)
 }
 
 // Help improve Nakama by sending anonymous usage statistics.
