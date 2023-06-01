@@ -51,8 +51,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// service prefix for routes. format: `/service_name`
-var servicePrefix *string = nil
+// ServicePrefix for routes. format: `/service_name`
+var ServicePrefix *string = nil
 
 // Used as part of JSON input validation.
 const byteBracket byte = '{'
@@ -218,17 +218,17 @@ func StartApiServer(logger *zap.Logger, startupLogger *zap.Logger, db *sql.DB, p
 	grpcGatewayRouter.HandleFunc("/", headerWriter).Methods("GET")
 	grpcGatewayRouter.HandleFunc("/ws", wsHandler).Methods("GET")
 
-	if servicePrefix != nil {
-		grpcGatewayRouter.HandleFunc(*servicePrefix+"/", headerWriter).Methods("GET")
-		grpcGatewayRouter.HandleFunc(*servicePrefix+"/ws", wsHandler).Methods("GET")
+	if ServicePrefix != nil {
+		grpcGatewayRouter.HandleFunc(*ServicePrefix+"/", headerWriter).Methods("GET")
+		grpcGatewayRouter.HandleFunc(*ServicePrefix+"/ws", wsHandler).Methods("GET")
 	}
 
 	// Another nested router to hijack RPC requests bound for GRPC Gateway.
 	grpcGatewayMux := mux.NewRouter()
 	grpcGatewayMux.HandleFunc("/v2/rpc/{id:.*}", s.RpcFuncHttp).Methods("GET", "POST")
 
-	if servicePrefix != nil {
-		grpcGatewayMux.HandleFunc(*servicePrefix+"/v2/rpc/{id:.*}", s.RpcFuncHttp).Methods("GET", "POST")
+	if ServicePrefix != nil {
+		grpcGatewayMux.HandleFunc(*ServicePrefix+"/v2/rpc/{id:.*}", s.RpcFuncHttp).Methods("GET", "POST")
 	}
 
 	grpcGatewayMux.NewRoute().Handler(grpcGateway)
