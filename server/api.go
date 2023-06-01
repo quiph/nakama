@@ -51,6 +51,9 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// service prefix for routes. format: `/service_name`
+var servicePrefix *string = nil
+
 // Used as part of JSON input validation.
 const byteBracket byte = '{'
 
@@ -209,12 +212,25 @@ func StartApiServer(logger *zap.Logger, startupLogger *zap.Logger, db *sql.DB, p
 
 	grpcGatewayRouter := mux.NewRouter()
 	// Special case routes. Do NOT enable compression on WebSocket route, it results in "http: response.Write on hijacked connection" errors.
-	grpcGatewayRouter.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }).Methods("GET")
-	grpcGatewayRouter.HandleFunc("/ws", NewSocketWsAcceptor(logger, config, sessionRegistry, sessionCache, statusRegistry, matchmaker, tracker, metrics, runtime, protojsonMarshaler, protojsonUnmarshaler, pipeline)).Methods("GET")
+	wsHandler := NewSocketWsAcceptor(logger, config, sessionRegistry, sessionCache, statusRegistry, matchmaker, tracker, metrics, runtime, protojsonMarshaler, protojsonUnmarshaler, pipeline)
+	headerWriter := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }
+
+	grpcGatewayRouter.HandleFunc("/", headerWriter).Methods("GET")
+	grpcGatewayRouter.HandleFunc("/ws", wsHandler).Methods("GET")
+
+	if servicePrefix != nil {
+		grpcGatewayRouter.HandleFunc(*servicePrefix+"/", headerWriter).Methods("GET")
+		grpcGatewayRouter.HandleFunc(*servicePrefix+"/ws", wsHandler).Methods("GET")
+	}
 
 	// Another nested router to hijack RPC requests bound for GRPC Gateway.
 	grpcGatewayMux := mux.NewRouter()
 	grpcGatewayMux.HandleFunc("/v2/rpc/{id:.*}", s.RpcFuncHttp).Methods("GET", "POST")
+
+	if servicePrefix != nil {
+		grpcGatewayMux.HandleFunc(*servicePrefix+"/v2/rpc/{id:.*}", s.RpcFuncHttp).Methods("GET", "POST")
+	}
+
 	grpcGatewayMux.NewRoute().Handler(grpcGateway)
 
 	// Enable stats recording on all request paths except:
